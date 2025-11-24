@@ -1,7 +1,7 @@
 # ============================================
 # 0. IMPORTACIONES
 # ============================================
-from google.colab import files #nuevo comentario 123
+from google.colab import files #nuevo comentario 123 conflicto
 import ipywidgets as widgets
 from IPython.display import display, clear_output
 from PIL import Image
