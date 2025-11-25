@@ -15,7 +15,7 @@ import time
 # 8-PUZZLE LOGIC
 # -------------------
 
-goal_state = (0,1,2,3,4,5,6,7,8)
+goal_state = (0, 1, 2, 3, 4, 5, 6, 7, 8)
 actions = ["up", "right", "down", "left"]
 
 moves = {
@@ -25,35 +25,89 @@ moves = {
     "left": -1
 }
 
+# Precomputamos posiciones objetivo de cada ficha para la heurística
+goal_pos = {tile: idx for idx, tile in enumerate(goal_state)}
+
+
 def valid_actions(state):
     hole = state.index(8)
     row, col = divmod(hole, 3)
     valid = []
-    if row > 0: valid.append("up")
-    if row < 2: valid.append("down")
-    if col < 2: valid.append("right")
-    if col > 0: valid.append("left")
+    if row > 0:
+        valid.append("up")
+    if row < 2:
+        valid.append("down")
+    if col < 2:
+        valid.append("right")
+    if col > 0:
+        valid.append("left")
     return valid
 
+
+def manhattan_distance(state):
+    """
+    Heurística: suma de distancias Manhattan de cada ficha a su posición objetivo.
+    No contamos el hueco (8).
+    """
+    dist = 0
+    for idx, tile in enumerate(state):
+        if tile == 8:
+            continue
+        r, c = divmod(idx, 3)
+        gr, gc = divmod(goal_pos[tile], 3)
+        dist += abs(r - gr) + abs(c - gc)
+    return dist
+
+
 def step_env(state, action):
+    """
+    Transición de entorno + reward shaping.
+    - Si la acción es inválida: penalización.
+    - Si es válida: se mueve el hueco, coste por paso,
+      y se añade un término de recompensa según si nos acercamos o alejamos del objetivo
+      usando la distancia Manhattan.
+    """
     if action not in valid_actions(state):
+        # Penalización fuerte por acción inválida
         return state, -5
+
+    old_dist = manhattan_distance(state)
+
     hole = state.index(8)
     new_pos = hole + moves[action]
     s = list(state)
     s[hole], s[new_pos] = s[new_pos], s[hole]
     new_state = tuple(s)
-    reward = 100 if new_state == goal_state else -1
+
+    new_dist = manhattan_distance(new_state)
+
+    # Coste base por paso
+    reward = -1
+
+    # Reward shaping: positivo si mejoramos la distancia, negativo si empeoramos
+    reward += (old_dist - new_dist)
+
+    # Bonus fuerte al llegar al objetivo
+    if new_state == goal_state:
+        reward += 50
+
     return new_state, reward
 
-def shuffle_state(state, moves_count=40):
+
+def shuffle_state(state, moves_count=20):
+    """
+    Baraja el puzzle aplicando 'moves_count' movimientos aleatorios válidos.
+    """
     s = state
     for _ in range(moves_count):
         a = random.choice(valid_actions(s))
         s, _ = step_env(s, a)
     return s
 
+
+# Tabla Q: para cada estado, diccionario acción->valor
 Q = defaultdict(lambda: {a: 0.0 for a in actions})
+
 
 def epsilon_greedy(state, epsilon):
     va = valid_actions(state)
@@ -62,75 +116,92 @@ def epsilon_greedy(state, epsilon):
     qv = Q[state]
     return max(va, key=lambda a: qv[a])
 
+
 def q_update(s, a, r, s2, alpha, gamma):
     best_next = max(Q[s2].values())
-    Q[s][a] = Q[s][a] + alpha*(r + gamma*best_next - Q[s][a])
+    Q[s][a] = Q[s][a] + alpha * (r + gamma * best_next - Q[s][a])
 
-def train_q_learning(episodes=5000, alpha=0.2, gamma=0.95, eps=0.3, max_steps=200):
+
+def train_q_learning(
+    episodes=20000,
+    alpha=0.2,
+    gamma=0.99,
+    eps_start=1.0,
+    eps_min=0.05,
+    max_steps=200,
+    shuffle_depth=20
+):
+    """
+    Entrena el agente con Q-Learning.
+    - Más episodios y épsilon decreciente para una exploración-explotación razonable.
+    - Barajado no demasiado profundo para que aprenda primero estados alcanzables.
+    """
     global Q
     Q = defaultdict(lambda: {a: 0.0 for a in actions})
+
     steps_log = []
     success_log = []
-    epsilon = eps
 
-    for _ in range(episodes):
-        state = shuffle_state(goal_state, 40)
+    epsilon = eps_start
+
+    for ep in range(episodes):
+        state = shuffle_state(goal_state, shuffle_depth)
         steps = 0
+        success = 0
 
         for _ in range(max_steps):
             a = epsilon_greedy(state, epsilon)
             s2, r = step_env(state, a)
             q_update(state, a, r, s2, alpha, gamma)
+
             state = s2
             steps += 1
+
             if state == goal_state:
-                success_log.append(1)
+                success = 1
                 break
-        else:
-            success_log.append(0)
 
         steps_log.append(steps)
-        epsilon = max(0.01, epsilon * 0.999)
+        success_log.append(success)
+
+        # Decaimiento del epsilon (no baja de eps_min)
+        epsilon = max(eps_min, epsilon * 0.9995)
 
     return steps_log, success_log
 
-def solve_with_Q_from_state(initial_state, max_steps=200):
+
+def solve_with_Q_from_state(initial_state, max_steps=200, epsilon_exec=0.05):
+    """
+    Usa la tabla Q aprendida para resolver desde un estado concreto.
+    - Política casi-greedy (epsilon pequeño) para evitar bucles.
+    - Sin visited: dejamos que max_steps ponga el límite.
+    """
     state = initial_state
     path = [state]
-    visited = set()
 
     for _ in range(max_steps):
+        if state == goal_state:
+            break
+
+        va = valid_actions(state)
+
+        # Un poquito de exploración en ejecución
+        if random.random() < epsilon_exec:
+            action = random.choice(va)
+        else:
+            qvals = Q[state]
+            action = max(va, key=lambda a: qvals[a])
+
+        new_state, _ = step_env(state, action)
+        state = new_state
+        path.append(state)
 
         if state == goal_state:
             break
 
-        if state in visited:
-            # escape from cycle
-            va = valid_actions(state)
-            qvals = Q[state]
-            ordered = sorted(va, key=lambda a: qvals[a], reverse=True)
-
-            escape = False
-            for alt in ordered[1:]:
-                new_state, _ = step_env(state, alt)
-                if new_state not in visited:
-                    state = new_state
-                    path.append(state)
-                    escape = True
-                    break
-
-            if not escape:
-                break
-        else:
-            visited.add(state)
-            va = valid_actions(state)
-            qvals = Q[state]
-            best = max(va, key=lambda a: qvals[a])
-            new_state, _ = step_env(state, best)
-            state = new_state
-            path.append(state)
-
     return path
+
+
 # =====================================
 # GUI (Tkinter)
 # =====================================
@@ -174,7 +245,7 @@ class PuzzleApp:
 
         for r in range(3):
             for c in range(3):
-                crop = img.crop((c*tile_w, r*tile_h, c*tile_w+tile_w, r*tile_h+tile_h))
+                crop = img.crop((c * tile_w, r * tile_h, c * tile_w + tile_w, r * tile_h + tile_h))
                 crop = crop.resize((120, 120))
                 self.image_tiles.append(ImageTk.PhotoImage(crop))
 
@@ -185,7 +256,7 @@ class PuzzleApp:
         self.canvas_cells = []
         for i in range(9):
             cv = tk.Canvas(self.grid_frame, width=120, height=120, bg="white")
-            cv.grid(row=i//3, column=i%3)
+            cv.grid(row=i // 3, column=i % 3)
             self.canvas_cells.append(cv)
 
         self.current_state = goal_state
@@ -196,15 +267,17 @@ class PuzzleApp:
             canvas = self.canvas_cells[i]
             canvas.delete("all")
             if tile == 8 or not self.image_tiles:
-                canvas.create_rectangle(0,0,120,120, fill="white")
+                canvas.create_rectangle(0, 0, 120, 120, fill="white")
             else:
-                canvas.create_image(0,0, anchor="nw", image=self.image_tiles[tile])
+                canvas.create_image(0, 0, anchor="nw", image=self.image_tiles[tile])
 
     # -------------------------------
     # Barajar puzzle
     # -------------------------------
     def shuffle_puzzle(self):
-        self.current_state = shuffle_state(goal_state, 40)
+        # Usamos un barajado moderado para aumentar la probabilidad
+        # de que el estado esté en el "espacio aprendido".
+        self.current_state = shuffle_state(goal_state, moves_count=20)
         self.draw_puzzle(self.current_state)
 
     # -------------------------------
@@ -213,38 +286,45 @@ class PuzzleApp:
     def train_agent(self):
         def run_training():
             steps, success = train_q_learning()
-            plt.figure(figsize=(6,3))
+
+            # Gráfica de pasos por episodio
+            plt.figure(figsize=(6, 3))
             plt.plot(steps)
             plt.title("Pasos por episodio")
             plt.grid()
+            plt.tight_layout()
             plt.show()
 
-            plt.figure(figsize=(6,3))
+            # Gráfica de éxito por episodio
+            plt.figure(figsize=(6, 3))
             plt.plot(success)
-            plt.title("Éxito por episodio")
+            plt.title("Éxito por episodio (1=exito, 0=fracaso)")
             plt.grid()
+            plt.tight_layout()
             plt.show()
 
-        threading.Thread(target=run_training).start()
+        threading.Thread(target=run_training, daemon=True).start()
 
     # -------------------------------
     # Resolver puzzle con Q
     # -------------------------------
     def solve_puzzle(self):
         def animate():
-            path = solve_with_Q_from_state(self.current_state)
+            path = solve_with_Q_from_state(self.current_state, max_steps=200, epsilon_exec=0.05)
             for state in path:
                 self.draw_puzzle(state)
                 time.sleep(0.3)
+            # Actualizamos estado actual por si no quedó exacto
             self.current_state = path[-1]
 
-        threading.Thread(target=animate).start()
+        threading.Thread(target=animate, daemon=True).start()
 
 
 # ==================================================
 # MAIN
 # ==================================================
 
-root = tk.Tk()
-app = PuzzleApp(root)
-root.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = PuzzleApp(root)
+    root.mainloop()
