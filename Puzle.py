@@ -384,6 +384,15 @@ def solve_with_Q_from_state(initial_state, max_steps=200, epsilon_exec=0.05):
         va = valid_actions(state)
 
         # Un poquito de exploración en ejecución
+
+        """
+        | Caso     | Probabilidad | Acción escogida            |
+        | -------- | ------------ | -------------------------- |
+        | Explorar | 5%           | Movimiento aleatorio       |
+        | Explotar | 95%          | Mejor acción según tabla Q |
+pero si te atascas te permites
+probar un movimiento distinto por si acaso
+        """
         if random.random() < epsilon_exec:
             action = random.choice(va)
         else:
