@@ -426,6 +426,8 @@ class PuzzleApp:
         self.grid_frame = tk.Frame(self.frame)
         self.grid_frame.grid(row=1, column=0, columnspan=4)
 
+
+
     # -------------------------------
     # Cargar imagen / dividirla
     # -------------------------------
@@ -509,13 +511,38 @@ class PuzzleApp:
     def solve_puzzle(self):
         def animate():
             path = solve_with_Q_from_state(self.current_state, max_steps=200, epsilon_exec=0.05)
-            for state in path:
+
+            for i, state in enumerate(path):
                 self.draw_puzzle(state)
+
+                print(f"\n🔹 Paso {i}")
+                print("Estado actual:", state)
+                print_transitions(state)
+
+                # Mostrar acción elegida según Q (si está entrenado)
+                va = valid_actions(state)
+                qvals = Q[state]
+                best = max(va, key=lambda a: qvals[a])
+                print(f"👉 Acción óptima según Q: {best}")
+
                 time.sleep(0.3)
-            # Actualizamos estado actual por si no quedó exacto
+
             self.current_state = path[-1]
+            if self.current_state == goal_state:
+                print("\n🎯 ¡Puzzle resuelto!\n")
+            else:
+                print("\n⚠️ No se pudo resolver completamente.\n")
 
         threading.Thread(target=animate, daemon=True).start()
+
+
+def print_transitions(state):
+    print(f"\n--- Transiciones desde estado {state} ---")
+    for a in actions:
+        new_s, r = step_env(state, a)
+        print(f" Acción {a:>5} → {new_s}, Recompensa: {r}")
+    print("--------------------------------------")
+
 
 
 # ==================================================
