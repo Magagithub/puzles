@@ -1,3 +1,201 @@
+"""
+🧩 1️⃣ Representación del puzzle: el Estado
+goal_state = (0, 1, 2, 3, 4, 5, 6, 7, 8)
+
+
+📌 Un estado es una tupla de 9 elementos.
+
+Número	Significa
+0–7	Piezas del puzzle
+8	El hueco en blanco
+
+Ejemplo de estado:
+
+(2, 5, 1,
+ 3, 8, 4,
+ 6, 7, 0)
+
+
+El agente SOLO ve esto.
+La imagen solo se usa para dibujar en la interfaz.
+
+🔁 2️⃣ Acciones y movimiento en la cuadrícula
+actions = ["up", "right", "down", "left"]
+moves = {
+    "up": -3,
+    "right": 1,
+    "down": 3,
+    "left": -1
+}
+
+
+📌 El hueco (8) se mueve según:
+
+Acción	Movimiento	Ejemplo (índice hueco)
+up	-3 posiciones	7 → 4
+right	+1	4 → 5
+down	+3	3 → 6
+left	-1	5 → 4
+🧠 3️⃣ Qué acciones son válidas
+def valid_actions(state):
+
+
+🔹 No puedes mover fuera del tablero.
+Ejemplo: si la ficha está en la fila 0 → no hay up
+
+📏 4️⃣ Heurística: distancia Manhattan
+def manhattan_distance(state):
+
+
+Cuenta cuántos movimientos le falta a cada pieza para llegar a la posición correcta:
+
+mientras más pequeña → más cerca del objetivo → mejor
+
+Ejemplo:
+
+Si el 1 está 2 posiciones lejos → suma +2.
+
+🎯 Esta heurística es lo que hace que aprenda mucho mejor.
+
+🏆 5️⃣ Recompensas: step_env()
+def step_env(state, action):
+
+
+¿Qué hace?
+
+1️⃣ Comprueba si la acción es válida
+2️⃣ Calcula nueva posición
+3️⃣ Calcula recompensa (reward)
+
+📌 Reglas de recompensa:
+
+Situación	Reward
+Acción inválida	-5
+Movimiento normal	-1
+Si mejora distancia Manhattan	+ (distancia_antigua − distancia_nueva)
+Si llega al objetivo	+50 extra
+
+➡️ Da puntos por acercarse al objetivo
+➡️ Penaliza alejarse o dar vueltas sin sentido
+
+Esto se llama reward shaping.
+
+🔀 6️⃣ Barajar el puzzle
+def shuffle_state(state, moves_count=20)
+
+
+Aplica movimientos aleatorios válidos para mezclarlo.
+
+📌 No es un mezclado al azar total, así que siempre se puede resolver.
+
+📚 7️⃣ Tabla Q
+Q = defaultdict(lambda: {a: 0.0 for a in actions})
+
+
+📌 Q es un diccionario de diccionarios:
+
+Q[estado][accion] = valor
+
+
+Ejemplo:
+
+Q[(0,1,2,3,4,5,6,7,8)]["right"] = 4.52
+
+
+Cuanto mayor sea el valor → mejor acción.
+
+🧩 8️⃣ Política epsilon-greedy
+def epsilon_greedy(state, epsilon):
+
+
+📌 Decide si elige:
+
+Tipo	Cuándo	Para qué
+Acción aleatoria	prob. epsilon	Explorar
+Mejor acción según Q	prob. 1-epsilon	Explotar conocimiento
+
+🔹 Al inicio eps = 1 → CASI TODO ES EXPLORAR
+🔹 Luego baja → se vuelve más inteligente
+
+📈 9️⃣ Actualización Q-Learning
+def q_update(s, a, r, s2, alpha, gamma):
+
+
+Fórmula oficial:
+
+Q(s,a) ← Q(s,a) + α * (r + γ * max_a' Q(s2, a') - Q(s,a))
+
+
+📌 Parámetros
+
+Letra	Qué es	Valor recomendado
+α (alpha)	Tasa aprendizaje	0.2
+γ (gamma)	Importancia futuro	0.99
+r	recompensa actual	según reward
+max Q	mejor acción del futuro	aprendizaje
+🏋️‍♂️ 🔟 Entrenamiento Q-Learning
+train_q_learning(
+    episodes=20000,
+    alpha=0.2,
+    gamma=0.99,
+    eps_start=1.0,
+    eps_min=0.05,
+    max_steps=200,
+    shuffle_depth=20
+)
+
+
+📌 El agente aprende jugando miles de partidas
+
+Parámetro	Significa
+episodes=20000	Partidas de entrenamiento
+eps_start=1.0	Al inicio: explorar mucho
+eps_min=0.05	Luego: elegir lo mejor
+max_steps=200	No se atasca eternamente
+shuffle_depth=20	Primero aprende casos simples
+
+🎯 Gráficas:
+
+Pasos necesarios por episodio ⬇️ con el tiempo
+
+Éxitos por episodio ⬆️ con el tiempo
+
+🤖 1️⃣1️⃣ Resolver usando la Q aprendida
+solve_with_Q_from_state(...)
+
+
+📌 Elige casi siempre la mejor acción
+pero un poquito de exploración (epsilon pequeño)
+
+🖼️ 1️⃣2️⃣ Interfaz gráfica Tkinter
+
+Solo es para visualizar:
+
+Botón cargar imagen → dividir la imagen en 3×3
+
+Botón barajar → mezclar el puzzle
+
+Botón entrenar → lanzar Q-learning
+
+Botón resolver → animación de movimientos
+
+📌 Nada de la imagen se usa en la lógica del puzzle
+
+🎯 RESUMEN VISUAL
+Estado (posiciones)
+       ↓
+    Q-Learning
+       ↓
+ Tabla Q aprende mejores movimientos
+       ↓
+Resolver con Q
+       ↓
+Tkinter muestra piezas moviéndose
+
+
+La IA cree que son números, no trozos de imagen.
+"""
+
 # ============================================
 # 0. IMPORTACIONES
 # ============================================
